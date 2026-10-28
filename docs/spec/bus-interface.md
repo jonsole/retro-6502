@@ -31,6 +31,7 @@ It follows retro-z80's spec 1, with the 65C02 in place of tv80. The memory side 
 | The CPU uses cycle 0 or 2, by T-state phase; at most one a slot | The CPU uses cycle 2 of the slot each cycle starts in, never cycle 0 | Every CPU cycle starts on slot edge 0 (section 5.2). Cycle 0 always goes to the free pool |
 | Writes posted to the next CPU cycle after T2 | Writes made in the cycle's own cycle 2, and done before the next CPU cycle | The core gives the write's address and data together, early in the cycle |
 | I/O ports in register:page form; both blocks also in the register page | No I/O space: the system block at `$FE00`–`$FEFF`, fixed; the rest through the register page | The 6502 has no I/O instructions; the MMU must be reachable from reset (design plan, branch 4) |
+| The Z80 makes no reads it does not use | The 65C02's dummy reads (indexed stores, page crossings, read-modify-write) are marked by the core and never made (section 6.4) | No addressing mode may have a side effect on a register (design plan, branch 8) |
 | An opcode fetch from the register page gives `0xFF` and no strobe | No special case: the bus cannot tell a fetch from a read before the cycle ends | The core gives no early cycle type (section 6.4) |
 | IM 2: the controller puts VECBASE + 2 × source on the bus in the acknowledge; I is the table's high byte | The two vector reads of an IRQ response go to `$FF00` + VECBASE + 2 × source, through window 7 | The 6502 has one IRQ vector and no acknowledge cycle; the table is in the page the vectors are in (section 7.1) |
 | IM 1: `RST 38h`, the handler reads INTID | The same idea is BRK's vector at `$FFFE`: with VECBASE = `0xD0` a spurious IRQ uses it too | 6502 |
@@ -42,11 +43,13 @@ It follows retro-z80's spec 1, with the 65C02 in place of tv80. The memory side 
 
 ### 2.1 The changes
 
-retro-6502 keeps its copy of `cpu_65c02.v` in `fpga/third_party/verilog-6502/`. It already differs from hoglet67's in two ways (`fpga/rtl/PROVENANCE.md`): D is cleared on BRK, IRQ, NMI and reset, and `IMPLEMENT_CORRECT_BCD_FLAGS` is defined. This spec adds two more:
+retro-6502 keeps its copy of `cpu_65c02.v` in `fpga/third_party/verilog-6502/`. It already differs from hoglet67's in two ways (`fpga/rtl/PROVENANCE.md`): D is cleared on BRK, IRQ, NMI and reset, and `IMPLEMENT_CORRECT_BCD_FLAGS` is defined. This spec adds three more, all tested in `sim/cputest` (section 11):
 
 - **cen.** A clock enable input. Every `always @(posedge clk)` block in the core and its ALU acts only on clocks where cen is high, so the core does one cycle per cen pulse, as tv80 does one T-state per cen pulse in retro-z80. The core's own RDY (which also pauses it) is tied high. RDY is not used as the enable: the core takes read data into DIHOLD on the first clock RDY is low, which assumes the byte arrives the clock after the address, as from block RAM.
 
 - **No writes in reset's sequence.** The core runs reset as its BRK sequence and makes the three pushes as real writes (WE = 1 in BRK0–BRK2). WE is held low in those states while the core is in reset's sequence (its `res` flag), so a reset writes nothing, as on a real 6502 (design plan, branch 7).
+
+- **DUMMY.** An output, high in a read cycle whose byte the core throws away (section 6.4). The bus interface makes no access for such a cycle.
 
 The core is otherwise unchanged. Klaus Dormann's 6502 functional test and 65C02 extended opcodes test must still pass with cen pulsed (section 11).
 
@@ -65,6 +68,7 @@ The core is otherwise unchanged. Klaus Dormann's 6502 functional test and 65C02 
 | DO[7:0] | out | Write data. Combinational |
 | DI[7:0] | in | Read data: the byte read in the **previous** cycle (section 5.1) |
 | SYNC | out | High in the cycle after an opcode fetch, while the opcode is on DI. Used by the debug unit, not by the bus interface |
+| DUMMY | out | High in a read cycle whose byte is thrown away (section 6.4). Combinational, like AB |
 
 ### 2.3 How the core times its accesses
 
@@ -136,7 +140,7 @@ retro-z80's register bus (its spec 1, section 4.2), with the same signals and th
 
 ### 5.1 What the core does
 
-In every cycle the core either reads (WE = 0) or writes (WE = 1) the address on AB. There is no "no access" cycle: internal cycles also put out an address and read it, and the byte is ignored (section 6.4).
+In every cycle the core either reads (WE = 0) or writes (WE = 1) the address on AB; there is no cycle without an address. A read it will throw away is marked DUMMY, and the bus interface makes no access for it (section 6.4). AB, WE, DO and DUMMY are sampled together at E + 2.
 
 | Point | Read cycle | Write cycle |
 |-------|------------|-------------|
@@ -153,6 +157,7 @@ Every CPU cycle starts on slot edge 0 (section 3.1), so every access of a 10 MHz
 | Access | What happens | Then |
 |--------|--------------|------|
 | Read | Sampled at E + 2; MMU lookup; cpu_req loaded at E + 3; cycle 2 issued at E + 4 | Byte usable at E + 8, loaded into the DI register at E + 10 |
+| Dummy read (DUMMY = 1) | No access: no request, no ROM read, no register strobe | The DI register keeps its byte; the core ignores it. Cycle 2 goes to the free pool |
 | Write | The same: issued at E + 4 | On the SRAM pins at E + 5 to E + 7, done before the next cycle starts |
 | Boot ROM, NONE or reserved page | No SRAM cycle: the ROM's block RAM answers in one clock; NONE and reserved give `0xFF` | Cycle 2 goes to the free pool |
 | Register page or `$FE00`–`$FEFF` | No SRAM cycle: a register bus cycle (section 6) | As above |
@@ -225,21 +230,25 @@ Everything else is reached through the register page (REGS, MMU page `0x3F8`, re
 - **Multi-byte values** are at consecutive registers, low byte at the lowest, written directly in any order (retro-z80 spec 3, rule 2), except the MMU pages (commit on the high byte) and the colours (commit on the red byte). `LDA`/`STA` pairs, or `STX` then `STY`, write a 2-byte register low byte first.
 - **Live counters** (TIME, COUNT) capture on a read of the low byte, into the CPU's one tagged capture, as retro-z80 (spec 3, rule 4): read the low byte first.
 
-### 6.4 Every cycle is an access
+### 6.4 Dummy reads
 
-The core puts an address out in every cycle, including internal ones, and gives no signal that a read is real. So the bus interface reads in every cycle with WE = 0, and makes the register bus strobe whenever such a cycle's address is a register. This matters only for registers whose read has a side effect: the FIFO data registers and any register cleared by reading.
+The core puts an address out in every cycle, and in some cycles it reads a byte it then throws away. On a 6502 these **dummy reads** reach memory and registers like any other read, so an indexed access can read a register the program never named: `STA SERDATA,X` and `STA (ptr),Y` read their target before writing it, a page-crossing `LDA abs,X` first reads the same offset in the page below, and `INC` reads its address twice. Reading SERDATA, KBDATA or SDDATA (with SDCON.AUTO) takes or starts a byte, SERDROP clears, and PALDAT's red read steps the index (retro-z80 spec 3, rule 14). A real 65C02 still makes most of these reads; it only moves the page-crossing ones to an instruction byte.
 
-What the core puts out in its internal cycles is listed in section 6.5. Known cases, as on a real 6502:
+In retro-6502 **no dummy read reaches the machine** (design plan, branch 8). The core marks each one with **DUMMY**, and the bus interface makes no access for it (section 5.2): no SRAM cycle, no ROM read, no register bus strobe. The core does not use the byte, so the program cannot tell, and cycle counts are unchanged. Every addressing mode is then safe on every register.
 
-- **Read-modify-write** instructions (`INC`, `DEC`, `ASL`, `LSR`, `ROL`, `ROR`, `TSB`, `TRB`) on a register read it, may read it again, then write it. They are never used on a FIFO data register.
-- **Indexed reads that cross a page** may read a wrong address first, in a 6502; whether `cpu_65c02.v` does, and which address, is open point B2.
-- An **opcode fetch** from a register (code that runs into `$FE00`–`$FEFF` or the register page by mistake) reads the register; nothing traps it, as the bus cannot tell a fetch until the next cycle (SYNC).
+| State of the core | Dummy when | The thrown-away read |
+|-------------------|------------|----------------------|
+| ABSX1 (`abs,X`, `abs,Y`) | The low byte plus the index carried, or the instruction stores or is a read-modify-write | At the operand's high byte : (low byte + index): the uncorrected address, or the target itself before a store or read-modify-write |
+| INDY2 (`(zp),Y`) | The carry, or a store | The same, from the pointer |
+| JMPIX1 (`JMP (abs,X)`) | The carry | The uncorrected pointer address |
+| BRA1 (a taken branch) | The target is in another page | The opcode at the uncorrected target |
+| READ (read-modify-write) | Always | The second read of the address; the first, in the state before, is the one used |
 
-Programs read a FIFO with a plain absolute read (`LDA $FE53`), which makes exactly one read of it.
+Checked in `sim/cputest`: with DI given a garbage byte after every DUMMY read, both of Klaus Dormann's tests still pass, with the same cycle counts (about 1.2 million and 1 million dummy reads). Marking a real read as DUMMY makes them fail at once.
 
-### 6.5 The core's cycles
+### 6.5 Other reads of no use
 
-To be filled in from `cpu_65c02.v` (open point B2): for each state of the core, whether it reads or writes, and which address it puts out. For example the REG state of an implied instruction puts out the previous cycle's address again (`AB = { ABH, ABL }`), and the PUSH, PULL, JSR, RTS, RTI and BRK states put out stack addresses.
+The core's other internal cycles read **PC or the stack** and ignore the byte, as a 6502 does: the byte after a 1-byte instruction (DECODE, REG), PUSH0, JSR2, RTS0, RTS3, RTI0, ZPX0, INDX0, IND0, and the next opcode in a taken branch's BRA0. They are not marked: they read code or page 1, never a register, unless code runs into the `$FE00` page or a register page, which is a fault anyway. An opcode fetch from a register is not caught (section 1.1).
 
 ## 7. Interrupts
 
@@ -319,7 +328,9 @@ retro-z80's NMI monitor paging, interrupt pages and stack capture are not in ver
 
 ## 11. Test plan
 
-- **Core with cen:** Klaus Dormann's 6502 functional test and 65C02 extended opcodes test pass in `sim/cputest` with cen pulsed every 10 clocks, and give the same cycle count as with cen always high.
+- **Core with cen:** Klaus Dormann's 6502 functional test and 65C02 extended opcodes test pass in `sim/cputest` with cen pulsed every 10 clocks, and give the same cycle count as with cen always high. Done, with garbage on DI after every DUMMY read.
+- **Dummy reads on the system:** `STA SERDATA,X`, `STA (ptr),Y` to SERDATA, `LDA abs,X` crossing into `$FE00`, `INC` and `TSB` on a register and a branch across a page make no extra register strobe or SRAM request; KBDATA and SERDATA lose no byte.
+- **Reset writes:** a reset changes no SRAM byte.
 - **Speeds:** at every CPUSPEED setting, count clocks per cycle (10n); every cen falls on slot edge 0; a change takes effect at the next cen edge.
 - **No waits:** run code from SRAM at every speed with the display (layers at their budget, urgent fetches), sprites, the copper and the DMA engine all busy; check that every access is issued in cycle 2 of its cycle's first slot, that the CPU never asks for cycle 0, and that the byte is ready before the cen edge that loads it into DI.
 - **Writes:** byte writes to even and odd addresses change only that byte; a read in the next cycle sees the new data.
@@ -336,7 +347,7 @@ retro-z80's NMI monitor paging, interrupt pages and stack capture are not in ver
 | # | Item |
 |---|------|
 | B1 | Timing in Vivado on the KS2 (XC7A15T-1): the core's paths as 10-clock multicycle paths, and AB, WE, DO through the MMU's window lookup in 2 clocks (section 3.3) |
-| B2 | List every state of `cpu_65c02.v` with its access (read or write) and address (section 6.5), and find which cycles make reads a program did not ask for: page-crossing indexed reads, the second read of a read-modify-write, internal cycles. If any can hit a FIFO data register in a way programs cannot avoid, bring out a "real read" signal from the core |
+| B2 | Closed: the core marks its dummy reads (DUMMY) and the bus interface skips them (design plan, branch 8; section 6.4) |
 | B3 | Cycle counts: check `cpu_65c02.v` against a real 65C02 instruction by instruction (a 65C02's decimal `ADC` and `SBC` take one more cycle than a 6502's; its read-modify-write and page-crossing cycles differ from the NMOS part). Exact counts matter at 1 and 2 MHz |
 | B4 | CPUSPEED's encoding for retro-6502 (n − 1 in bits 3–0, values above 9 acting as 9) and whether SYSCFG.CPU = 1 names the 65C02. Both are in spec 7, still to be written from retro-z80's |
 | B5 | Closed: the IRQ vector table at `$FF00` + VECBASE (design plan, branch 7) |
