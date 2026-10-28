@@ -41,6 +41,21 @@ The SRAM controller (retro68k's `sram_ctl.v`) keeps the SRAM busy every 20 ns. B
 
 So the memory's **throughput** is one access every 20 ns, but its **latency** is 40 ns from the issue, and the request must be in one clock before that.
 
+The reads overlap, like a production line: a new one starts every 20 ns while the one before is still on its way, so two are always in flight:
+
+| Time | Read A (issued 0 ns) | Read B (issued 20 ns) | Read C (issued 40 ns) |
+|------|----------------------|-----------------------|-----------------------|
+| 0 ns | Issued | | |
+| 10–30 ns | On the SRAM pins | | |
+| 20 ns | | Issued | |
+| 30 ns | Data caught in the pads | On the pins (30–50 ns) | |
+| 40 ns | **Data usable** | | Issued |
+| 50 ns | | Data caught | On the pins (50–70 ns) |
+| 60 ns | | **Data usable** | |
+| 80 ns | | | **Data usable** |
+
+A result comes out every 20 ns, but each is 40 ns old. The display and the DMA engine use the memory this way because they know their addresses in advance (the next address is the last plus 2), so read B can start before read A's data is back. A CPU whose next address *is* the byte being read cannot start read B until read A is done, so it pays the full 40 ns every time and the overlap does not help it (section 4).
+
 ## 4. What the 6502 needs
 
 The 6502 makes a memory access in every clock cycle. In many cycles the next address is built from the byte just read:
