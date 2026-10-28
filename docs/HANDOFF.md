@@ -12,8 +12,8 @@ retro-6502 is retro-z80's machine with a 65C02 in place of the Z80: the same chi
 
 ## 2. Decided so far
 
-See the design plan, section 1: its own repo, started now, a 65C02 (Arlet Ottens' core), the interrupt controller answering the vector fetch (the bus interface tells an IRQ response from BRK), the register window at `$FE00`–`$FEFF`, retro-z80's chipset unchanged.
+See the design plan, section 1: its own repo, started now, a 65C02 (Arlet Ottens' core), the interrupt controller answering the vector fetch (the bus interface tells an IRQ response from BRK), the register window at `$FE00`–`$FEFF`, RAM in windows 0–6 and ROM in 7 at reset, ca65, retro-z80's speeds plus 1 and 2 MHz, retro-z80's chipset unchanged.
 
 ## 3. Next step
 
-The next branch of the decision tree: what windows 0 and 7 hold at reset and the layout of the `$FE00` page (Q2), the assembler (Q4) and the CPU speeds (Q6). Then spec 1 (bus interface), written from retro-z80's spec 1, and a check of Arlet's core (licence, a 65C02 test suite in simulation).
+The next branch of the decision tree: the layout of the `$FE00` page (Q2), BASIC (Q5) and the monitor and debug link (Q7). Then spec 1 (bus interface), written from retro-z80's spec 1, and a check of Arlet's core (licence, a 65C02 test suite in simulation).

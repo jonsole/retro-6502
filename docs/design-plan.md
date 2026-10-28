@@ -17,6 +17,9 @@ retro-6502 is the 6502 sister of [retro-z80](https://github.com/jonsole/retro-z8
 | 2 | CPU core | **Arlet Ottens' Verilog 65C02**, once its licence and exactness are checked (a 65C02 test suite in simulation) |
 | 2 | Register window | **`$FE00`–`$FEFF`**, one page just below the vectors, never paged out (as the BBC Micro's SHEILA). It reaches the system block, so the MMU works from reset; the full blocks are reached through the register page, as on retro-z80 |
 | 2 | BRK against IRQ | **The bus interface spots the IRQ response from outside the core** and only then makes the controller answer the `$FFFE`/`$FFFF` reads; BRK reads the ROM's vector |
+| 3 | Reset map | **RAM in windows 0–6 (`$0000`–`$DFFF`), the boot ROM's page in window 7 (`$E000`–`$FFFF`)**, with the `$FE00` register page over it. Zero page and stack in window 0 |
+| 3 | Assembler | **ca65** (cc65), with its linker; the register map generator gains a ca65 include |
+| 3 | CPU speeds | **retro-z80's CPUSPEED divider** (20, 10, 6.67, 5, 4, 3.33, 2.86, 2.5 MHz, slot-locked), with **1 and 2 MHz codes** for BBC Micro and C64 timing in place of the 3.57 MHz Spectrum code |
 
 ## 2. Known differences from retro-z80
 
@@ -35,9 +38,9 @@ retro-6502 is the 6502 sister of [retro-z80](https://github.com/jonsole/retro-z8
 | # | Item | Plan |
 |---|------|------|
 | Q1 | Arlet's 65C02 core | Chosen (branch 2). To check: licence, exactness (a 65C02 test suite), RDY, and how its bus timing (read data the clock after the address) fits the slots |
-| Q2 | Memory map seen by the CPU | Register window `$FE00`–`$FEFF` (branch 2). Still open: what window 0 (zero page, stack) and window 7 (ROM, vectors) hold at reset, and how the register page in `$FE00` is laid out (256 bytes for the system block's `0x00`–`0xFF`) |
+| Q2 | Memory map seen by the CPU | Register window `$FE00`–`$FEFF` (branch 2). Reset map decided (branch 3). Still open: the layout of the `$FE00` page (the system block's `0x00`–`0xFF` in 256 bytes, against the vectors and the ROM code that must stay reachable) |
 | Q3 | IRQ response against BRK | Closed (branch 2): the bus interface spots the response. To specify in spec 1: which cycles it watches (the response has no opcode fetch before its pushes), and NMI's `$FFFA` |
-| Q4 | Assembler | ca65 (cc65) or 64tass |
+| Q4 | Assembler | Closed: ca65 (branch 3) |
 | Q5 | BASIC | BBC BASIC for the 6502 (licence to check) or EhBASIC |
-| Q6 | CPU speeds | retro-z80's CPUSPEED divider, or a 6502 set (for example 1 and 2 MHz for old timing) |
+| Q6 | CPU speeds | Closed (branch 3). To check in spec 1: how the 1 and 2 MHz codes lock to the slots (÷100 and ÷50 clocks a cycle) |
 | Q7 | Monitor, upload and debug link | retro-z80's shared monitor and debug specs with a 6502 register set |
