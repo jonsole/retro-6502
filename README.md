@@ -4,7 +4,7 @@ The 6502 sister of [retro-z80](https://github.com/jonsole/retro-z80) and [retro6
 
 ## Goals (version 1)
 
-- **CPU:** 65C02 at up to 20 MHz, never waiting for memory; a vector per interrupt source
+- **CPU:** 65C02 at 20 MHz; zero page, stack and ROM in fast block RAM, SRAM accesses wait for their data; a vector per interrupt source
 - **Memory:** retro-z80's: 4 MB SRAM (2 MB on the KS2) through eight 8 KB MMU windows; 32 KB boot ROM
 - **Chipset:** retro-z80's, unchanged: three layers, 8 sprites, the copper, the DMA engine, timers, serial, SD, keyboards, joysticks
 - **Registers:** in memory (the 6502 has no I/O space)

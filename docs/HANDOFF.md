@@ -12,7 +12,7 @@ retro-6502 is retro-z80's machine with a 65C02 in place of the Z80: the same chi
 
 ## 2. Decided so far
 
-See the design plan, section 1: its own repo, started now, a 65C02 (Arlet Ottens' core), the interrupt controller answering the vector fetch (the bus interface tells an IRQ response from BRK), the register window at `$FE00`–`$FEFF`, RAM in windows 0–6 and ROM in 7 at reset, ca65, retro-z80's speeds plus 1 and 2 MHz, the `$FE00` page as the system block, BBC BASIC (licence to find, Q5), retro-z80's monitor and debug link, retro-z80's chipset unchanged.
+See the design plan, section 1: its own repo, started now, a 65C02 (Arlet Ottens' core), the interrupt controller answering the vector fetch (the bus interface tells an IRQ response from BRK), the register window at `$FE00`–`$FEFF`, RAM in windows 0–6 and ROM in 7 at reset, ca65, 20 MHz with zero page and stack in block RAM (SRAM accesses wait), retro-z80's speed divider plus 1 and 2 MHz, the `$FE00` page as the system block, BBC BASIC (licence to find, Q5), retro-z80's monitor and debug link, retro-z80's chipset unchanged.
 
 ## 3. Next step
 
