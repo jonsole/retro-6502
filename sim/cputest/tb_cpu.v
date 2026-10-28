@@ -42,12 +42,14 @@ module tb_cpu;
 
     always @(posedge clk) if (!reset) begin
         cycles = cycles + 1;
+        // SYNC is high in the cycle after the opcode fetch, when the opcode
+        // is at DI and AB is already the next byte: the opcode was at AB - 1.
         if (SYNC) begin
-            same = (AB == last_pc) ? same + 1 : 0;
-            last_pc = AB;
+            same = (AB - 16'd1 == last_pc) ? same + 1 : 0;
+            last_pc = AB - 16'd1;
             if (same == 3) begin
-                if (AB == pass) $display("PASS: looped at %h after %0d cycles", AB, cycles);
-                else            $display("FAIL: trapped at %h after %0d cycles", AB, cycles);
+                if (last_pc == pass) $display("PASS: looped at %h after %0d cycles", last_pc, cycles);
+                else                 $display("FAIL: trapped at %h after %0d cycles", last_pc, cycles);
                 $finish;
             end
         end

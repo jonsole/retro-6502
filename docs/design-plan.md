@@ -43,7 +43,7 @@ retro-6502 is the 6502 sister of [retro-z80](https://github.com/jonsole/retro-z8
 
 | # | Item | Plan |
 |---|------|------|
-| Q1 | hoglet67's `cpu_65c02.v` | Chosen (branch 2). To check: Klaus Dormann's 6502 and 65C02 test suites in simulation, RDY, and how its bus timing fits the slots |
+| Q1 | hoglet67's `cpu_65c02.v` | Chosen (branch 2). Passes Klaus Dormann's 6502 functional test and 65C02 extended opcodes test (Rockwell/WDC blocks skipped) in Verilator, after two fixes: D cleared on BRK and interrupts, 65C02 decimal N and Z (`sim/cputest`, `fpga/rtl/PROVENANCE.md`). Still to check: the decimal test (needs assembling), the interrupt test, cycle counts against a real 65C02 (decimal ADC/SBC take an extra cycle there), RDY with the bus interface. Not in the core: BBR, BBS, RMB, SMB, WAI, STP |
 | Q2 | Memory map seen by the CPU | Register window `$FE00`–`$FEFF` (branch 2). Closed: reset map (branch 3), the `$FE00` page (branch 4) |
 | Q3 | IRQ response against BRK | Closed (branch 2): the bus interface spots the response. To specify in spec 1: which cycles it watches (the response has no opcode fetch before its pushes), and NMI's `$FFFA` |
 | Q4 | Assembler | Closed: ca65 (branch 3) |

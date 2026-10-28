@@ -16,4 +16,4 @@ See the design plan, section 1: its own repo, started now, a 65C02 (Arlet Ottens
 
 ## 3. Next step
 
-Branches 1–4 are decided. Next: spec 1 (bus interface), written from retro-z80's spec 1, and a check of Arlet's core (licence, a 65C02 test suite in simulation).
+Branches 1–5 are decided. The core passes Klaus Dormann's functional and 65C02 tests (`make -C sim/cputest`, needs Verilator; about a minute). Next: spec 1 (bus interface), written from retro-z80's spec 1: the slots, RDY waits for SRAM, the fast page pair, the `$FE00` page, the vector fetch.

@@ -46,7 +46,7 @@
  * If IMPLEMENT_CORRECT_BCD_FLAGS is defined, this additional logic is added
  */
 
-// `define IMPLEMENT_CORRECT_BCD_FLAGS
+`define IMPLEMENT_CORRECT_BCD_FLAGS   // retro-6502: on, for 65C02 N and Z in decimal mode
 
 module cpu_65c02( clk, reset, AB, DI, DO, WE, IRQ, NMI, RDY, SYNC );
 
@@ -885,7 +885,9 @@ always @(posedge clk)
  * Update D flag
  */
 always @(posedge clk )
-    if( state == RTI2 )
+    if( state == BRK3 )         // retro-6502: a 65C02 clears D on BRK, IRQ, NMI and reset
+        D <= 0;
+    else if( state == RTI2 )
         D <= DIMUX[3];
     else if( state == DECODE ) begin
         if( sed ) D <= 1;

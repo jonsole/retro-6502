@@ -6,7 +6,7 @@ KLAUS     = klaus
 CORE      = ../../fpga/third_party/verilog-6502
 SRC       = tb_cpu.v $(CORE)/cpu_65c02.v $(CORE)/ALU.v
 
-all: functional
+all: functional extended
 
 $(KLAUS)/.fetched:
 	rm -rf $(KLAUS)
@@ -14,17 +14,30 @@ $(KLAUS)/.fetched:
 	git -C $(KLAUS) checkout -q $(KLAUS_REV)
 	touch $@
 
-tb_cpu.vvp: $(SRC)
-	iverilog -g2005 -o $@ $(SRC)
+# Verilator: the functional test is 96 million cycles (about 25 s here;
+# Icarus did not finish in 15 minutes).
+obj/Vtb_cpu: $(SRC)
+	verilator --binary -j 4 -Wno-fatal -Wno-lint -Wno-style --top-module tb_cpu -Mdir obj $(SRC) > obj.log 2>&1 || (tail obj.log; false)
 
 functional.hex: $(KLAUS)/.fetched
 	python3 bin2memh.py $(KLAUS)/bin_files/6502_functional_test.bin $@
 
+extended.hex: $(KLAUS)/.fetched skip_rockwell.py
+	python3 skip_rockwell.py $(KLAUS)/bin_files/65C02_extended_opcodes_test.bin extended.bin
+	python3 bin2memh.py extended.bin $@
+
 # The NMOS functional test (documented opcodes); passes when it loops at 3469.
-functional: tb_cpu.vvp functional.hex
-	vvp -n tb_cpu.vvp +image=functional.hex +pass=3469 | grep -E 'PASS|FAIL'
+functional: obj/Vtb_cpu functional.hex
+	obj/Vtb_cpu +image=functional.hex +pass=3469 | grep -E 'PASS|FAIL' | tee functional.log
+	grep -q PASS functional.log
+
+# The 65C02 extended opcodes test, with its Rockwell/WDC blocks skipped;
+# passes when it loops at 24f1.
+extended: obj/Vtb_cpu extended.hex
+	obj/Vtb_cpu +image=extended.hex +pass=24f1 | grep -E 'PASS|FAIL' | tee extended.log
+	grep -q PASS extended.log
 
 clean:
-	rm -f tb_cpu.vvp *.hex
+	rm -rf obj obj.log *.hex *.bin *.log
 
-.PHONY: all functional clean
+.PHONY: all functional extended clean
