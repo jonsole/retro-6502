@@ -14,7 +14,7 @@ retro-6502 is the 6502 sister of [retro-z80](https://github.com/jonsole/retro-z8
 | 1 | Interrupt vectors | **The interrupt controller answers the vector fetch:** on a hardware IRQ response, the reads of `$FFFE`/`$FFFF` return VECBASE + 2 × source, so each source has its own vector, as IM 2 gives the Z80 |
 | 1 | Chipset | retro-z80's, copied from a committed, tested state: video, sprites, copper, DMA engine, scheduler, SRAM controller, MMU, interrupt controller, timers, serial, SD, keyboards, joysticks |
 | 1 | Board | As retro-z80: the KS2 for bring-up, the KS3 for the full machine |
-| 2 | CPU core | **Arlet Ottens' Verilog 65C02**, once its licence and exactness are checked (a 65C02 test suite in simulation) |
+| 2 | CPU core | ~~Arlet Ottens' Verilog 65C02~~ (no licence, and its cycle counts differ from a 6502's) **`cpu_65c02.v` from `hoglet67/verilog-6502`**: Arlet's original 6502 core ("use in any project, keep this message") with 65C02 extensions by David Banks and Ed Spittles; real 6502 cycle counts; used in BBC Micro FPGA builds |
 | 2 | Register window | **`$FE00`–`$FEFF`**, one page just below the vectors, never paged out (as the BBC Micro's SHEILA). It reaches the system block, so the MMU works from reset; the full blocks are reached through the register page, as on retro-z80 |
 | 2 | BRK against IRQ | **The bus interface spots the IRQ response from outside the core** and only then makes the controller answer the `$FFFE`/`$FFFF` reads; BRK reads the ROM's vector |
 | 3 | Reset map | **RAM in windows 0–6 (`$0000`–`$DFFF`), the boot ROM's page in window 7 (`$E000`–`$FFFF`)**, with the `$FE00` register page over it. Zero page and stack in window 0 |
@@ -40,7 +40,7 @@ retro-6502 is the 6502 sister of [retro-z80](https://github.com/jonsole/retro-z8
 
 | # | Item | Plan |
 |---|------|------|
-| Q1 | Arlet's 65C02 core | Chosen (branch 2). To check: licence, exactness (a 65C02 test suite), RDY, and how its bus timing (read data the clock after the address) fits the slots |
+| Q1 | hoglet67's `cpu_65c02.v` | Chosen (branch 2). To check: Klaus Dormann's 6502 and 65C02 test suites in simulation, RDY, and how its bus timing fits the slots |
 | Q2 | Memory map seen by the CPU | Register window `$FE00`–`$FEFF` (branch 2). Closed: reset map (branch 3), the `$FE00` page (branch 4) |
 | Q3 | IRQ response against BRK | Closed (branch 2): the bus interface spots the response. To specify in spec 1: which cycles it watches (the response has no opcode fetch before its pushes), and NMI's `$FFFA` |
 | Q4 | Assembler | Closed: ca65 (branch 3) |
