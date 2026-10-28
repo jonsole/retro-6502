@@ -54,3 +54,13 @@ retro-6502 is the 6502 sister of [retro-z80](https://github.com/jonsole/retro-z8
 | Q6 | CPU speeds | Closed (branch 6). To specify in spec 1: CPUSPEED's encoding (n = 1–10) |
 | Q8 | The fast page pair | Closed: dropped (branch 6) |
 | Q7 | Monitor, upload and debug link | Closed (branch 4). To agree with retro-z80: the 6502 register set in the debug link's frames |
+
+## 4. Specs
+
+retro-6502 uses retro-z80's specs for the chipset and memory system (its specs 2–6, 8–14, 17). Its own specs cover what the 6502 changes:
+
+| # | Spec | Status |
+|---|------|--------|
+| 1 | [CPU bus interface](spec/bus-interface.md) | Draft |
+| 7 | System (CPUSPEED, SYSCFG, SYSID, boot) | To write, from retro-z80's spec 7 |
+| 16 | Boot ROM and monitor | To write, from retro-z80's spec 16 and the shared monitor spec |
