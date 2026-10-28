@@ -30,7 +30,7 @@ Ready to build and try on the board: `fpga/ks2/build.sh --program` (needs Vivado
 - `fpga/rtl/bus6502.v`, the bus interface of spec 1, and `fpga/rtl/retro6502.v`, the computer;
 - boot ROM 0.1 (`firmware/boot/boot.s`, ca65): a self-test at power-on, then the background colour cycling from the VBLANK interrupt, 4 s vectored and 4 s plain.
 
-In simulation (`sim/`, Verilator): `make -C sim boot` runs the ROM until both IRQ modes are seen (about 90 s), checking that every byte the 65C02 takes from SRAM or the ROM is the memory's, that no read is late and that DUMMY reads make no access. `make -C sim klaus` and `make -C sim ext` run Klaus Dormann's tests from SRAM on the whole machine (about an hour each). `sh fpga/lint.sh` lints it all.
+In simulation (`sim/`, Verilator): `make -C sim boot` runs the ROM until both IRQ modes are seen (about 90 s), checking that every byte the 65C02 takes from SRAM or the ROM is the memory's, that no read is late and that DUMMY reads make no access. `make -C sim klaus` and `make -C sim ext` run Klaus Dormann's 6502 functional and 65C02 extended tests from SRAM on the whole machine at 10 MHz (about an hour each): both pass, with every byte checked, no read late and no DUMMY read made. `sh fpga/lint.sh` lints it all.
 
 Not tried yet: Vivado (timing, size) and the board.
 
