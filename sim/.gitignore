@@ -1,0 +1,8 @@
+obj/
+obj.log
+rom/
+*.hex
+*.bin
+*.log
+*.out
+*.time

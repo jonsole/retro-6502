@@ -22,12 +22,24 @@ See the design plan, section 1: its own repo, started now, a 65C02 (hoglet67's `
 - **Spec 7** (system, `docs/spec/system.md`), draft, as changes to retro-z80's spec 7: reset map, SYSID `0x36`, SYSCFG.CPU = 1, CPUSPEED.
 - **Note:** `docs/notes/why-10-mhz.md`.
 
-## 4. Next step
+## 4. The first KS2 build (28 October 2026)
 
-1. Spec 16 (boot ROM and monitor) for the 65C02, from retro-z80's spec 16 and the shared monitor spec.
-2. The first KS2 build (hardware first): copy retro-z80's chipset RTL (a committed, tested state, recorded in `fpga/rtl/PROVENANCE.md`), write the bus interface, and a small ca65 boot ROM that runs a self-test and prints over serial and on the boot console.
+Ready to build and try on the board: `fpga/ks2/build.sh --program` (needs Vivado and cc65; `fpga/ks2/README.md` says what to see). In the build:
 
-## 5. From retro-z80 (its session, 28 October 2026)
+- retro-z80's chipset at 5414e5d (`fpga/rtl/PROVENANCE.md`), with INTCON.VECTOR, retro-6502's system registers and its MMU reset map;
+- `fpga/rtl/bus6502.v`, the bus interface of spec 1, and `fpga/rtl/retro6502.v`, the computer;
+- boot ROM 0.1 (`firmware/boot/boot.s`, ca65): a self-test at power-on, then the background colour cycling from the VBLANK interrupt, 4 s vectored and 4 s plain.
+
+In simulation (`sim/`, Verilator): `make -C sim boot` runs the ROM until both IRQ modes are seen (about 90 s), checking that every byte the 65C02 takes from SRAM or the ROM is the memory's, that no read is late and that DUMMY reads make no access. `make -C sim klaus` and `make -C sim ext` run Klaus Dormann's tests from SRAM on the whole machine (about an hour each). `sh fpga/lint.sh` lints it all.
+
+Not tried yet: Vivado (timing, size) and the board.
+
+## 5. Next step
+
+1. The user builds and tries it on the KS2; fix what the board shows.
+2. Spec 16 (boot ROM and monitor) for the 65C02, and the boot console.
+
+## 6. From retro-z80 (its session, 28 October 2026)
 
 - Copy the chipset from retro-z80's `main` **at or after 5414e5d**. The PC link changed in 5691edd and 5414e5d to SLIP-style control commands and escapes: `C0 c ~c` is a control command (01 BREAK, 02 RESET, 03 UPLOAD), and data bytes `C0` and `DB` go as `DB DC` and `DB DD` while control is enabled. This fixed a hang where a frame ending in `0x00` was held back; retro68k is adopting it too. `serial.v` and the boot ROM's link code must both follow it.
 - Reusable PC tools: `tools/rlink.py` (link, upload, terminal), `tools/rz80_bridge.py` (DAP for VS Code and MCP on port 8780; a stub model with `--model`), `tools/vscode/` (the debugger extension). A 6502 build needs the bridge and stub to know the 65C02's registers (design plan, branch 4).
