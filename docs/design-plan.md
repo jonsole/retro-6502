@@ -20,6 +20,9 @@ retro-6502 is the 6502 sister of [retro-z80](https://github.com/jonsole/retro-z8
 | 3 | Reset map | **RAM in windows 0–6 (`$0000`–`$DFFF`), the boot ROM's page in window 7 (`$E000`–`$FFFF`)**, with the `$FE00` register page over it. Zero page and stack in window 0 |
 | 3 | Assembler | **ca65** (cc65), with its linker; the register map generator gains a ca65 include |
 | 3 | CPU speeds | **retro-z80's CPUSPEED divider** (20, 10, 6.67, 5, 4, 3.33, 2.86, 2.5 MHz, slot-locked), with **1 and 2 MHz codes** for BBC Micro and C64 timing in place of the 3.57 MHz Spectrum code |
+| 4 | `$FE00` page | **The whole page is the system block:** `$FE00` + n is system register n, the same numbers as retro-z80's I/O page `0x00` (interrupts, timers, serial, SD, keyboard, system, MMU, geometry). The custom block and the other I/O pages (debug unit `0x02`) are reached by mapping the register page into a window, as on retro-z80. The boot ROM keeps `$FF00`–`$FFFF` for the vectors and entry code that must stay reachable |
+| 4 | BASIC | **BBC BASIC (6502)**, as retro-z80 has BBC BASIC (Z80), if a licence to ship it can be found; Acorn's ROM is copyrighted. Fallback: Microsoft's 6502 BASIC 1.1 (MIT licence) |
+| 4 | Monitor and debug link | **retro-z80's specs** (the shared monitor commands, the upload protocol, the debug link), with the 6502's registers (A, X, Y, S, P, PC) in place of the Z80's, so the PC bridge and VS Code extension serve both |
 
 ## 2. Known differences from retro-z80
 
@@ -38,9 +41,9 @@ retro-6502 is the 6502 sister of [retro-z80](https://github.com/jonsole/retro-z8
 | # | Item | Plan |
 |---|------|------|
 | Q1 | Arlet's 65C02 core | Chosen (branch 2). To check: licence, exactness (a 65C02 test suite), RDY, and how its bus timing (read data the clock after the address) fits the slots |
-| Q2 | Memory map seen by the CPU | Register window `$FE00`–`$FEFF` (branch 2). Reset map decided (branch 3). Still open: the layout of the `$FE00` page (the system block's `0x00`–`0xFF` in 256 bytes, against the vectors and the ROM code that must stay reachable) |
+| Q2 | Memory map seen by the CPU | Register window `$FE00`–`$FEFF` (branch 2). Closed: reset map (branch 3), the `$FE00` page (branch 4) |
 | Q3 | IRQ response against BRK | Closed (branch 2): the bus interface spots the response. To specify in spec 1: which cycles it watches (the response has no opcode fetch before its pushes), and NMI's `$FFFA` |
 | Q4 | Assembler | Closed: ca65 (branch 3) |
-| Q5 | BASIC | BBC BASIC for the 6502 (licence to check) or EhBASIC |
+| Q5 | BBC BASIC licence | Branch 4 chose BBC BASIC (6502). Find who holds the rights to Acorn's 6502 BASIC and whether a licence can be had; otherwise Microsoft's 6502 BASIC 1.1 (MIT) |
 | Q6 | CPU speeds | Closed (branch 3). To check in spec 1: how the 1 and 2 MHz codes lock to the slots (÷100 and ÷50 clocks a cycle) |
-| Q7 | Monitor, upload and debug link | retro-z80's shared monitor and debug specs with a 6502 register set |
+| Q7 | Monitor, upload and debug link | Closed (branch 4). To agree with retro-z80: the 6502 register set in the debug link's frames |
