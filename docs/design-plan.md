@@ -64,6 +64,8 @@ retro-6502 uses retro-z80's specs for the chipset and memory system (its specs 2
 | # | Spec | Status |
 |---|------|--------|
 | 1 | [CPU bus interface](spec/bus-interface.md) | Draft |
-| 7 | System (CPUSPEED, SYSCFG, SYSID, boot) | To write, from retro-z80's spec 7 |
+| 7 | [System](spec/system.md) | Draft: changes to retro-z80's spec 7 |
 | 8 | Dummy reads | **None reach the machine:** the core marks each read whose byte it throws away (`DUMMY`: the uncorrected address of an indexed access it repeats, any indexed store or read-modify-write, a branch or `JMP (abs,X)` across a page, the second read of a read-modify-write), and the bus interface makes no access for it. So no addressing mode has a read side effect on a register, unlike a 6502 or even a real 65C02, and cycle counts are unchanged (spec 1, section 6.4) |
+| 9 | Identification | **SYSID `0x36` ("6")**; **SYSCFG.CPU = 1** for the 65C02 (0 stays the Z80) (spec 7, section 6) |
+| 9 | CPUSPEED | **DIV in bits 3–0 = n − 1**, a cycle every n slots: `0x00` 10 MHz … `0x04` 2 MHz … `0x09` 1 MHz; `0x0A`–`0x0F` act as `0x09`; bits 7–4 read 0. Same register (`0x77`) and reset value as retro-z80 (spec 7, section 6.1) |
 | 16 | Boot ROM and monitor | To write, from retro-z80's spec 16 and the shared monitor spec |

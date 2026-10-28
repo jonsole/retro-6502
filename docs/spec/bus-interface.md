@@ -80,7 +80,7 @@ So the bus interface acts as the core's synchronous memory, but slowed to the CP
 
 ### 3.1 Speeds
 
-The core runs on the 100 MHz system clock. A **CPU cycle is one cen pulse**: the core does nothing on clocks where cen is low. cen comes from a slot counter in the bus interface, set by CPUSPEED (retro-z80's register `0x77`, retro-6502's own encoding; spec 7 to be written):
+The core runs on the 100 MHz system clock. A **CPU cycle is one cen pulse**: the core does nothing on clocks where cen is low. cen comes from a slot counter in the bus interface, set by CPUSPEED (retro-z80's register `0x77` at `$FE77`, with retro-6502's encoding; spec 7, section 6.1):
 
 | CPUSPEED | Slots per cycle (n) | Clocks per cycle | 65C02 speed |
 |----------|---------------------|------------------|-------------|
@@ -94,7 +94,7 @@ The core runs on the 100 MHz system clock. A **CPU cycle is one cen pulse**: the
 | `0x07` | 8 | 80 | 1.25 MHz |
 | `0x08` | 9 | 90 | 1.11 MHz |
 | `0x09` | 10 | 100 | **1 MHz** (C64, Apple II, BBC Micro's slow bus) |
-| `0x0A`–`0xFF` | 10 | 100 | As `0x09`; bits 7–4 read 0 (open point B4) |
+| `0x0A`–`0x0F` | 10 | 100 | As `0x09`. Bits 7–4 read 0 |
 
 - **Locked to the slots:** cen is high on slot edge 0 of every n-th slot, so every CPU cycle starts on slot edge 0, at every speed.
 - **Speed changes** take effect at the cen edge after the write to CPUSPEED: the cycle after the write is the first at the new speed. A cycle never changes speed half way through, and no lining up is needed, as every speed is locked to the same slot edge.
@@ -349,7 +349,7 @@ retro-z80's NMI monitor paging, interrupt pages and stack capture are not in ver
 | B1 | Timing in Vivado on the KS2 (XC7A15T-1): the core's paths as 10-clock multicycle paths, and AB, WE, DO through the MMU's window lookup in 2 clocks (section 3.3) |
 | B2 | Closed: the core marks its dummy reads (DUMMY) and the bus interface skips them (design plan, branch 8; section 6.4) |
 | B3 | Cycle counts: check `cpu_65c02.v` against a real 65C02 instruction by instruction (a 65C02's decimal `ADC` and `SBC` take one more cycle than a 6502's; its read-modify-write and page-crossing cycles differ from the NMOS part). Exact counts matter at 1 and 2 MHz |
-| B4 | CPUSPEED's encoding for retro-6502 (n − 1 in bits 3–0, values above 9 acting as 9) and whether SYSCFG.CPU = 1 names the 65C02. Both are in spec 7, still to be written from retro-z80's |
+| B4 | Closed: CPUSPEED DIV (3–0) = n − 1, SYSCFG.CPU = 1, SYSID `0x36` (design plan, branch 9; spec 7) |
 | B5 | Closed: the IRQ vector table at `$FF00` + VECBASE (design plan, branch 7) |
 | B6 | retro-z80's extras for the NMI and interrupts (the NMI monitor paging, interrupt pages, stack capture) and its debug unit (spec 18): which retro-6502 needs, and how each would spot the 6502's response and return (`RTI`) from outside the core. The debug link (design plan, branch 4) needs the debug unit; SYNC gives it the start of each instruction |
 | B7 | Whether the CPU's spare cycle 0 could read ahead the byte at PC + 1 for instruction fetches, as a later speed-up (`docs/notes/why-10-mhz.md`, N1) |
