@@ -24,6 +24,8 @@ retro-6502 is the 6502 sister of [retro-z80](https://github.com/jonsole/retro-z8
 | 4 | BASIC | **BBC BASIC (6502)**, as retro-z80 has BBC BASIC (Z80), if a licence to ship it can be found; Acorn's ROM is copyrighted. Fallback: Microsoft's 6502 BASIC 1.1 (MIT licence) |
 | 4 | Monitor and debug link | **retro-z80's specs** (the shared monitor commands, the upload protocol, the debug link), with the 6502's registers (A, X, Y, S, P, PC) in place of the Z80's, so the PC bridge and VS Code extension serve both |
 | 5 | Top speed | **20 MHz with zero page and stack in fast RAM.** `$0000`–`$01FF` is block RAM inside the FPGA (one clock to read), as is the boot ROM, so those accesses never wait. An SRAM access waits (RDY) until its data is back. On the shared memory system an SRAM access takes 7–12 clocks from address to data, more than a 50 ns cycle, and the 6502 often needs a byte it has just read to form its next address; so code running from SRAM is about as fast as a 10 MHz 6502 that never waits, and zero page, stack and ROM work twice as fast. The chipset (DMA engine, copper, video) cannot see the fast page pair |
+| 5 | Fast RAM | **Fixed at `$0000`–`$01FF`:** always the block RAM, over whatever window 0 maps; the rest of window 0 (`$0200`–`$1FFF`) is SRAM as mapped. 512 bytes, one bank |
+| 5 | Fast RAM from the chipset | **Through the register bus only:** the block RAM's second port answers at register page offsets `0x0400`–`0x05FF` (reserved there in retro-z80's register page), so the monitor, the debug link and the DMA engine's register jobs reach it; no SRAM cycles, never shown by video |
 
 ## 2. Known differences from retro-z80
 
@@ -47,5 +49,5 @@ retro-6502 is the 6502 sister of [retro-z80](https://github.com/jonsole/retro-z8
 | Q4 | Assembler | Closed: ca65 (branch 3) |
 | Q5 | BBC BASIC licence | Branch 4 chose BBC BASIC (6502). Find who holds the rights to Acorn's 6502 BASIC and whether a licence can be had; otherwise Microsoft's 6502 BASIC 1.1 (MIT) |
 | Q6 | CPU speeds | Closed (branches 3 and 5). To specify in spec 1: what CPUSPEED's divider means at 20 MHz with waits, and how the 1 and 2 MHz codes keep exact timing (a cycle every 100 or 50 clocks, each SRAM access fitting inside it) |
-| Q8 | The fast page pair | To decide: is `$0000`–`$01FF` fixed block RAM, or can the MMU map it (window 0 is 8 KB, the block RAM 512 bytes); can the DMA engine or the serial upload reach it; is there more than one pair (per task) |
+| Q8 | The fast page pair | Closed (branch 5): fixed, one bank, reached by the chipset through the register page |
 | Q7 | Monitor, upload and debug link | Closed (branch 4). To agree with retro-z80: the 6502 register set in the debug link's frames |
