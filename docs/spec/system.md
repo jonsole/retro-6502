@@ -25,7 +25,7 @@ This spec covers how retro-6502 starts: reset, the boot ROM, identification and 
 | Registers reached through ports `0x7000`–`0x7B00` | At `$FE70`–`$FE7B` | No I/O space (spec 1, section 6.1) |
 | Reset held for at least 28 clocks (a T-state at 3.57 MHz) | At least 100 clocks (a cycle at 1 MHz) | The slowest speed |
 | The boot ROM assembled with sjasmplus | With ca65 and ld65 | Design plan, branch 3 |
-| IM 2 with the ROM's own table | VECBASE = `0xD0`: the vector table at `$FFD0`–`$FFFF` in ROM page 3 | Spec 1, section 7.1 |
+| IM 2 with the ROM's own table | Plain IRQs (INTCON.VECTOR clear); a vector table at `$FFD0`–`$FFFF` in ROM page 3 for programs that turn VECTOR on with VECBASE = `0xD0` | Spec 1, section 7.1; design plan, branch 10 |
 | Boot file `BOOT.Z80` | `BOOT.65` (open point SY2) | – |
 | BBC BASIC (Z80) | BBC BASIC (6502) if a licence is found, else Microsoft's 6502 BASIC (design plan, branch 4) | – |
 | NMI monitor paging; the beeper on port `0xFE` bit 4 | Neither (section 10) | Spectrum extras; port `0xFE` is not built |
@@ -67,7 +67,7 @@ ROM page 3 holds, at its top:
 
 | Address in window 7 | ROM offset | Contents |
 |---------------------|------------|----------|
-| `$FFD0`–`$FFF9` | `0x7FD0`–`0x7FF9` | The IRQ vector table, sources 0–20 (spec 1, section 7.1; VECBASE = `0xD0`) |
+| `$FFD0`–`$FFF9` | `0x7FD0`–`0x7FF9` | The IRQ vector table, sources 0–20, used with INTCON.VECTOR set and VECBASE = `0xD0` (spec 1, section 7.1) |
 | `$FFFA`–`$FFFB` | `0x7FFA` | NMI vector (table entry 21) |
 | `$FFFC`–`$FFFD` | `0x7FFC` | Reset vector (entry 22) |
 | `$FFFE`–`$FFFF` | `0x7FFE` | IRQ/BRK vector (entry 23, NONE: a spurious IRQ) |
@@ -78,7 +78,7 @@ An operating system that maps SRAM into window 7 copies this table and the vecto
 
 As retro-z80's outline (its spec 7, section 5, and spec 16), with these changes:
 
-- Step 4: set up the stack (S = `$FF`, page 1) and **VECBASE = `0xD0`**, every source off; the ROM polls and starts no timer tick.
+- Step 4: set up the stack (S = `$FF`, page 1), every source off, INTCON.VECTOR clear; the ROM polls and starts no timer tick. Its table at `$FFD0` is there for programs that set VECBASE = `0xD0` and VECTOR.
 - Step 9: the boot file is **`BOOT.65`** (open point SY2), and BASIC is BBC BASIC (6502) if it can be licensed, otherwise Microsoft's 6502 BASIC (design plan, branch 4).
 - The monitor and the debug link are retro-z80's, with the 65C02's registers (A, X, Y, S, P, PC) in place of the Z80's (design plan, branch 4); spec 16 is still to be written.
 
@@ -141,7 +141,7 @@ As retro-z80's, with these changes:
 - **Reset state:** after every reset the 65C02 reads `$FFFC` from ROM offset `0x7FFC`, runs at 10 MHz with every cycle on slot edge 0; MMU0–MMU7 read `0x000`–`0x006` and `0x3FF`; no SRAM byte changes across any reset but power-on, including page 1.
 - **Registers:** SYSID reads `0x36` and SYSCFG.CPU 1 at `$FE70` and `$FE72` and at register page offsets `0x0070` and `0x0072`.
 - **CPU speed:** every CPUSPEED value gives its cycle spacing (10n clocks, `0x0A`–`0x0F` as `0x09`); the change happens at the next cen edge; every cycle on slot edge 0; both of Klaus Dormann's tests pass at 10 MHz and 1 MHz on the system.
-- **Vectors in ROM:** the boot ROM's table at `$FFD0`–`$FFFF` gives each source in use its handler with VECBASE = `0xD0`.
+- **Vectors in ROM:** after reset every IRQ reads `$FFFE`; with VECTOR set and VECBASE = `0xD0` the boot ROM's table at `$FFD0`–`$FFFF` gives each source in use its handler.
 - Left out: the NMI paging and beeper tests, and the 3.57 MHz tests.
 
 ## 14. Open points

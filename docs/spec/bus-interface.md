@@ -17,7 +17,7 @@ It follows retro-z80's spec 1, with the 65C02 in place of tv80. The memory side 
 | Wait states | None, ever. RDY is tied high (section 5) |
 | Registers | No I/O space. **`$FE00`–`$FEFF` is the system block**, register n at `$FE00` + n, over whatever window 7 maps (design plan, branch 4). Everything else (the custom block, the palettes, the other I/O pages) through the register page, mapped into a window (section 6) |
 | Register bus | retro-z80's: 8-bit, one clock per access; masters the copper (first), the CPU, the sprite sequencer, the DMA engine (last) (section 4.2) |
-| Interrupts | IRQ from the interrupt controller (retro-z80 spec 8). In an IRQ response the bus interface sends the two vector reads to a table entry chosen by the source: `$FF00` + VECBASE + 2 × source and the byte after it, in place of `$FFFE` and `$FFFF`. BRK reads `$FFFE` as normal (section 7) |
+| Interrupts | IRQ from the interrupt controller (retro-z80 spec 8). Plain after reset: every IRQ reads `$FFFE`, and the handler reads INTID. With **INTCON.VECTOR** set, the bus interface sends an IRQ response's two vector reads to a table entry chosen by the source: `$FF00` + VECBASE + 2 × source and the byte after it, in place of `$FFFE` and `$FFFF`. BRK always reads `$FFFE` (section 7) |
 | NMI | From the interrupt controller (button, USB BREAK); the core's own vector at `$FFFA` (section 7.3) |
 | Reset | The first cycle starts on slot edge 0; the core reads its reset vector at `$FFFC` from boot ROM page 3 in window 7 (section 8) |
 | Not used | RDY (tied high); the core has no SO, VPB, ML, BE or WAI/STP |
@@ -34,7 +34,7 @@ It follows retro-z80's spec 1, with the 65C02 in place of tv80. The memory side 
 | The Z80 makes no reads it does not use | The 65C02's dummy reads (indexed stores, page crossings, read-modify-write) are marked by the core and never made (section 6.4) | No addressing mode may have a side effect on a register (design plan, branch 8) |
 | An opcode fetch from the register page gives `0xFF` and no strobe | No special case: the bus cannot tell a fetch from a read before the cycle ends | The core gives no early cycle type (section 6.4) |
 | IM 2: the controller puts VECBASE + 2 × source on the bus in the acknowledge; I is the table's high byte | The two vector reads of an IRQ response go to `$FF00` + VECBASE + 2 × source, through window 7 | The 6502 has one IRQ vector and no acknowledge cycle; the table is in the page the vectors are in (section 7.1) |
-| IM 1: `RST 38h`, the handler reads INTID | The same idea is BRK's vector at `$FFFE`: with VECBASE = `0xD0` a spurious IRQ uses it too | 6502 |
+| IM 1: `RST 38h`, the handler reads INTID; IM 2 chosen by the `IM` instruction | INTCON.VECTOR = 0 (after reset): the handler at `$FFFE` reads INTID. INTCON.VECTOR = 1: the table, as IM 2 | The 6502 has no interrupt modes, so a register bit chooses (design plan, branch 10) | 6502 |
 | NMI at `0x0066`; NMI monitor paging; interrupt pages and stack capture | NMI through its own vector at `$FFFA`; no paging, no capture in version 1 (open point B6) | retro-z80 extras built round the Z80's response cycles |
 | Refresh cycles ignored | None | The 6502 has no refresh |
 | HALT waits for an interrupt | No WAI or STP in the core | `cpu_65c02.v` |
@@ -272,7 +272,16 @@ The interrupt controller (retro-z80 spec 8, unchanged) drives IRQ while an enabl
 
 To tell the IRQ from the NMI at that point, the bus interface keeps a **copy of the core's NMI edge flag**, made by the same rule on the same cen clocks: set by a rising edge of NMI, cleared at the end of a cycle that reads `$FFFA`. The core reads `$FFFA` if its flag is set when it pushes P, and `$FFFE` if not (`cpu_65c02.v`, state BRK2), so with the copy clear the response is an IRQ. Reset also runs this sequence, but with no writes (section 2.1), so the watcher never sees it.
 
-**The vector reads.** At E + 2 of the P push (cycle 5) the bus interface sees an IRQ response and sends **int_vreq** at E + 3. The controller picks the pending source with the lowest number, writes it to INTID, freezes the choice and gives the vector byte v = VECBASE + 2 × source from the next clock (retro-z80 spec 8, sections 3 and 5). In cycle 6 the core reads `$FFFE`; the bus interface puts v in place of A7–A0 as it loads the request: the read goes to **`$FF00` + v**. Cycle 7's read of `$FFFF` goes to `$FF00` + v + 1. After it, the bus interface sends **int_ack**, which ends the freeze. If cycle 6 does not read `$FFFE` (it always does; a check for the testbench), nothing is changed and int_ack is still sent.
+**Plain or vectored.** **INTCON.VECTOR** (bit 1 of INTCON, `$FE00`; design plan, branch 10) chooses, as the Z80's `IM 1` and `IM 2` do:
+
+| INTCON.VECTOR | An IRQ response reads | The handler |
+|---------------|-----------------------|-------------|
+| 0 (after reset) | `$FFFE` and `$FFFF`, as on any 6502 | One handler for every IRQ (and BRK); it reads INTID (`$FE0C`) to find the source, as a Z80 IM 1 handler does |
+| 1 | `$FF00` + VECBASE + 2 × source and the byte after it | Each source's own handler, from the table |
+
+In both modes the bus interface spots the response and asks the controller for the source, so INTID is set at every response and the controller's choice is frozen until int_ack. VECTOR changes only the address of the two vector reads. The bus interface takes the bit at the moment it sends int_vreq, so the two reads of one response always agree.
+
+**The vector reads.** At E + 2 of the P push (cycle 5) the bus interface sees an IRQ response and sends **int_vreq** at E + 3. The controller picks the pending source with the lowest number, writes it to INTID, freezes the choice and gives the vector byte v = VECBASE + 2 × source from the next clock (retro-z80 spec 8, sections 3 and 5). In cycle 6 the core reads `$FFFE`. With VECTOR set, the bus interface puts v in place of A7–A0 as it loads the request: the read goes to **`$FF00` + v**, and cycle 7's read of `$FFFF` goes to `$FF00` + v + 1. With VECTOR clear, both reads are left as they are. After it, the bus interface sends **int_ack**, which ends the freeze. If cycle 6 does not read `$FFFE` (it always does; a check for the testbench), nothing is changed and int_ack is still sent.
 
 The window is window 7 in both reads (A15–A13 do not change), so the MMU lookup is the same as without the change, and both reads are made through window 7's read page. A15–A8 stay `0xFF`: the table is in `$FF00`–`$FFFF`, not in the `$FE00` page.
 
@@ -282,13 +291,13 @@ The window is window 7 in both reads (A15–A13 do not change), so the MMU looku
 | Cycle 5, E + 3 | int_vreq (the push's own write request is loaded as normal) |
 | Cycle 5, E + 4 | v ready, held until int_ack |
 | Cycle 6, E + 2 | AB = `$FFFE` sampled |
-| Cycle 6, E + 3 | cpu_req loaded (or the ROM read made) with address `$FF00` + v |
+| Cycle 6, E + 3 | cpu_req loaded (or the ROM read made) with address `$FF00` + v (VECTOR set) or `$FFFE` |
 | Cycle 6, E + 10 | The handler address's low byte on DI |
 | Cycle 7 | The same with `$FF00` + v + 1; int_ack at its E + 3 |
 
-So the 6502 reads its handler's address from a **table of 24 two-byte entries** at `$FF00` + VECBASE, one per source number, in whatever page window 7 maps: sources 0–20, two unused entries (21, 22) and NONE (23) for a spurious response. This is IM 2's table in the 6502's vector page.
+With VECTOR set, the 6502 reads its handler's address from a **table of 24 two-byte entries** at `$FF00` + VECBASE, one per source number, in whatever page window 7 maps: sources 0–20, two unused entries (21, 22) and NONE (23) for a spurious response. This is IM 2's table in the 6502's vector page.
 
-**VECBASE = `0xD0`** puts the table at `$FFD0`–`$FFFF`, so that entry 21 is the NMI vector (`$FFFA`), entry 22 the reset vector (`$FFFC`) and entry 23, NONE, the ordinary IRQ/BRK vector (`$FFFE`). Sources 0–20 are at `$FFD0`–`$FFF9`. A spurious response (no source pending when the vector is asked for: the program turned the source off in the instruction during which IRQ was sampled) then goes to the BRK handler, which sees B = 0 on the stack and returns. The boot ROM sets VECBASE to `0xD0`; after reset VECBASE is `0x00` and MASTER is off, so no IRQ is taken before it is set.
+**VECBASE = `0xD0`** puts the table at `$FFD0`–`$FFFF`, so that entry 21 is the NMI vector (`$FFFA`), entry 22 the reset vector (`$FFFC`) and entry 23, NONE, the ordinary IRQ/BRK vector (`$FFFE`). Sources 0–20 are at `$FFD0`–`$FFF9`. A spurious response (no source pending when the vector is asked for: the program turned the source off in the instruction during which IRQ was sampled) then goes to the BRK handler, which sees B = 0 on the stack and returns. After reset VECTOR is 0, VECBASE `0x00` and MASTER off. A program that wants vectoring fills its table, sets VECBASE (`0xD0` is the natural place) and then sets VECTOR, with MASTER or with the I flag set while it does so. The boot ROM leaves VECTOR clear (it polls).
 
 - The table is wherever window 7 points: in the boot ROM after reset, in SRAM when an operating system maps RAM there and fills its own table.
 - **INTID** (`$FE0C`) gives the source of the last response, as in retro-z80.
@@ -296,7 +305,7 @@ So the 6502 reads its handler's address from a **table of 24 two-byte entries** 
 
 ### 7.2 BRK
 
-BRK pushes P with B = 1, so the pattern of section 7.1 does not match, and its reads of `$FFFE` and `$FFFF` are ordinary: the BRK handler's address is the window 7 page's own vector at `$FFFE`. With VECBASE = `0xD0` that is also table entry 23.
+BRK pushes P with B = 1, so the pattern of section 7.1 does not match, and its reads of `$FFFE` and `$FFFF` are ordinary in both modes: the BRK handler's address is the window 7 page's own vector at `$FFFE`. With VECTOR clear that handler also takes every IRQ and tells them apart by B on the stack, as on any 6502. With VECTOR set and VECBASE = `0xD0` it is also table entry 23.
 
 ### 7.3 NMI
 
@@ -337,7 +346,8 @@ retro-z80's NMI monitor paging, interrupt pages and stack capture are not in ver
 - **Read and write pages:** in a split window, reads use the read page and writes the write page, at all speeds.
 - **`$FE00` page:** every system register at `$FE00` + n gives the same value as at its register page offset; a window 7 page is never touched at `$FE00`–`$FEFF`; one strobe per access, also with a copper write in the same clock; `$FE1F`, `$FEFE` and unanswered registers read `0xFF`.
 - **Register page:** reads and writes through REGS in any window give one strobe each; a FIFO read with `LDA abs` takes one byte.
-- **IRQ vectors:** with VECBASE = `0xD0` and `0x00`, each source in use reaches its handler through its table entry; INTID agrees; one int_vreq and one int_ack per response. A spurious response reads entry 23. BRK reads `$FFFE` itself. `JSR`, `PHA` of a byte with bit 4 clear, reset and an NMI give no int_vreq. An NMI edge during an IRQ response's pushes makes the core read `$FFFA`: the copy of the NMI flag agrees, and no int_vreq is sent.
+- **Plain IRQs:** with VECTOR clear, every source reads `$FFFE` and `$FFFF`; INTID names it; one int_vreq and one int_ack per response.
+- **IRQ vectors:** with VECTOR set and VECBASE = `0xD0` and `0x00`, each source in use reaches its handler through its table entry; INTID agrees; one int_vreq and one int_ack per response. A spurious response reads entry 23. BRK reads `$FFFE` itself. `JSR`, `PHA` of a byte with bit 4 clear, reset and an NMI give no int_vreq. An NMI edge during an IRQ response's pushes makes the core read `$FFFA`: the copy of the NMI flag agrees, and no int_vreq is sent.
 - **NMI:** from the button and from USB BREAK, the core reads `$FFFA`; nmi_ack is sent once.
 - **Instruction tests on the whole system:** the functional and extended tests from SRAM and from the boot ROM, at 10 MHz and 1 MHz, with the system testbench's never-waited checks.
 - **Reset:** the first cycle after every reset starts on slot edge 0; the core reads `$FFFC` from ROM offset `0x7FFC` and runs at 10 MHz.
@@ -350,7 +360,7 @@ retro-z80's NMI monitor paging, interrupt pages and stack capture are not in ver
 | B2 | Closed: the core marks its dummy reads (DUMMY) and the bus interface skips them (design plan, branch 8; section 6.4) |
 | B3 | Cycle counts: check `cpu_65c02.v` against a real 65C02 instruction by instruction (a 65C02's decimal `ADC` and `SBC` take one more cycle than a 6502's; its read-modify-write and page-crossing cycles differ from the NMOS part). Exact counts matter at 1 and 2 MHz |
 | B4 | Closed: CPUSPEED DIV (3–0) = n − 1, SYSCFG.CPU = 1, SYSID `0x36` (design plan, branch 9; spec 7) |
-| B5 | Closed: the IRQ vector table at `$FF00` + VECBASE (design plan, branch 7) |
+| B5 | Closed: the IRQ vector table at `$FF00` + VECBASE (design plan, branch 7), turned on by INTCON.VECTOR (branch 10) |
 | B6 | retro-z80's extras for the NMI and interrupts (the NMI monitor paging, interrupt pages, stack capture) and its debug unit (spec 18): which retro-6502 needs, and how each would spot the 6502's response and return (`RTI`) from outside the core. The debug link (design plan, branch 4) needs the debug unit; SYNC gives it the start of each instruction |
 | B7 | Whether the CPU's spare cycle 0 could read ahead the byte at PC + 1 for instruction fetches, as a later speed-up (`docs/notes/why-10-mhz.md`, N1) |
 | B8 | Closed: reset's pushes are suppressed in the core (design plan, branch 7; section 2.1) |
