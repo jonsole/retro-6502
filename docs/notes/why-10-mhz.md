@@ -1,6 +1,6 @@
 # Why a 6502 runs from SRAM at 10 MHz, not 20
 
-A note on the speed limit behind design plan branch 5. retro-z80's Z80 runs at 20 MHz and never waits for memory, and so does retro68k's 68000. A 6502 on the same memory system can do that only at 10 MHz. The SRAM is not the reason: it answers in 10 ns. The reasons are how often a 6502 uses memory, how it uses each byte it reads, and the fixed timing grid the memory is shared on.
+A note on the speed limit behind design plan branch 6 (10 MHz, never waits). retro-z80's Z80 runs at 20 MHz and never waits for memory, and so does retro68k's 68000. A 6502 on the same memory system can do that only at 10 MHz. The SRAM is not the reason: it answers in 10 ns. The reasons are how often a 6502 uses memory, how it uses each byte it reads, and the fixed timing grid the memory is shared on.
 
 Timing is from retro-z80's spec 2 (memory, sections 3, 4 and 8) and retro68k's spec 1 (bus interface).
 
@@ -132,18 +132,16 @@ The clock figures make the 6502 look slow, but it is not. A 6502 makes an access
 
 | Way | Speed | Cost | Chosen |
 |-----|-------|------|--------|
-| 10 MHz, locked to the slots | 10 MHz everywhere, never waits | None | – |
-| 20 MHz, an SRAM read waits until its data is in | About 10 MHz from SRAM; 20 MHz from block RAM (the boot ROM) | Uneven timing; RDY in the bus interface | Part of branch 5 |
-| **Zero page and stack in block RAM** (`$0000`–`$01FF`), 20 MHz, SRAM accesses wait | 20 MHz for zero page, stack and ROM; about 10 MHz from SRAM | 512 bytes the chipset sees only through the register page; RDY in the bus interface | **Yes, branch 5** |
-| A different slot layout for the CPU | Perhaps between 10 and 20 MHz | Changes the chipset shared with retro-z80 and retro68k, and the display's bandwidth | No |
+| **10 MHz, locked to the slots** | 10 MHz everywhere, never waits | None | **Yes, branch 6** |
+| 20 MHz, an SRAM read waits until its data is in | About 10 MHz from SRAM; 20 MHz from block RAM (the boot ROM) | Uneven timing; RDY in the bus interface | No |
+| Zero page and stack in block RAM (`$0000`–`$01FF`), 20 MHz, SRAM accesses wait | 20 MHz for zero page, stack and ROM; about 10 MHz from SRAM | 512 bytes the chipset sees only through the register page; RDY in the bus interface | Branch 5, replaced by branch 6 |
+| retro-6502's own timing: 4 cycles of 25 ns a slot, the CPU on cycles 0 and 2 (every 50 ns), the SRAM controller and pads on 200 MHz | 20 MHz, never waits, if the KS2 meets timing | The fifth cycle goes: audio, the copper and the DMA engine must take the CPU's cycles; a memory system of its own | No (branch 6) |
 | A faster path to the SRAM (no pad flip-flops) | Saves up to 20 ns a read | Loses the clean, fixed pin timing the whole memory system relies on; still on the 20 ns grid | No |
 
-Block RAM inside the FPGA answers in one clock, so it is not limited by any of this. Zero page and the stack are where 6502 code spends much of its time (pointers, variables, subroutine returns), so putting them in block RAM speeds up the most-used accesses. Code and data in SRAM run at about the 10 MHz speed.
+10 MHz keeps the memory system shared with retro-z80 and retro68k unchanged, keeps all memory visible to the chipset, and needs no waits, so the 6502's timing stays exact at every speed.
 
 ## 10. Open points
 
 | # | Point |
 |---|-------|
-| N1 | Measure the real mix: run typical code (BASIC, a game loop) in simulation and count SRAM waits, to give the effective speed of branch 5 |
-| N2 | How short the 6502's bus interface can make decode and MMU look-up (1 clock, as in section 5, or retro-z80's 3), which sets how long each SRAM wait is |
-| N3 | Whether instruction fetches from SRAM could be read ahead (the byte at PC + 1 is often wanted next), using the CPU's spare cycle in each slot |
+| N1 | Whether the CPU's spare cycle in each slot could read ahead for instruction fetches (the byte at PC + 1 is often wanted next) as a later speed-up |
