@@ -26,3 +26,10 @@ See the design plan, section 1: its own repo, started now, a 65C02 (hoglet67's `
 
 1. Spec 16 (boot ROM and monitor) for the 65C02, from retro-z80's spec 16 and the shared monitor spec.
 2. The first KS2 build (hardware first): copy retro-z80's chipset RTL (a committed, tested state, recorded in `fpga/rtl/PROVENANCE.md`), write the bus interface, and a small ca65 boot ROM that runs a self-test and prints over serial and on the boot console.
+
+## 5. From retro-z80 (its session, 28 October 2026)
+
+- Copy the chipset from retro-z80's `main` **at or after 5414e5d**. The PC link changed in 5691edd and 5414e5d to SLIP-style control commands and escapes: `C0 c ~c` is a control command (01 BREAK, 02 RESET, 03 UPLOAD), and data bytes `C0` and `DB` go as `DB DC` and `DB DD` while control is enabled. This fixed a hang where a frame ending in `0x00` was held back; retro68k is adopting it too. `serial.v` and the boot ROM's link code must both follow it.
+- Reusable PC tools: `tools/rlink.py` (link, upload, terminal), `tools/rz80_bridge.py` (DAP for VS Code and MCP on port 8780; a stub model with `--model`), `tools/vscode/` (the debugger extension). A 6502 build needs the bridge and stub to know the 65C02's registers (design plan, branch 4).
+- The debug unit (retro-z80 spec 18) gives 4 breakpoints and 2 watchpoints in hardware; for retro-6502 it is spec 1's open point B6.
+- My retro-z80 changes about the 6502 (the design plan's branch 8 and Q2, the spec 1 note, freeing register page `0x0400`–`0x05FF`) are on retro-z80's branch `claude/festive-goldberg-ui43p7`, not yet on its `main`.
