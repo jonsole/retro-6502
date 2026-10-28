@@ -42,9 +42,11 @@ It follows retro-z80's spec 1, with the 65C02 in place of tv80. The memory side 
 
 ### 2.1 The changes
 
-retro-6502 keeps its copy of `cpu_65c02.v` in `fpga/third_party/verilog-6502/`. It already differs from hoglet67's in two ways (`fpga/rtl/PROVENANCE.md`): D is cleared on BRK, IRQ, NMI and reset, and `IMPLEMENT_CORRECT_BCD_FLAGS` is defined. This spec adds one more:
+retro-6502 keeps its copy of `cpu_65c02.v` in `fpga/third_party/verilog-6502/`. It already differs from hoglet67's in two ways (`fpga/rtl/PROVENANCE.md`): D is cleared on BRK, IRQ, NMI and reset, and `IMPLEMENT_CORRECT_BCD_FLAGS` is defined. This spec adds two more:
 
 - **cen.** A clock enable input. Every `always @(posedge clk)` block in the core and its ALU acts only on clocks where cen is high, so the core does one cycle per cen pulse, as tv80 does one T-state per cen pulse in retro-z80. The core's own RDY (which also pauses it) is tied high. RDY is not used as the enable: the core takes read data into DIHOLD on the first clock RDY is low, which assumes the byte arrives the clock after the address, as from block RAM.
+
+- **No writes in reset's sequence.** The core runs reset as its BRK sequence and makes the three pushes as real writes (WE = 1 in BRK0–BRK2). WE is held low in those states while the core is in reset's sequence (its `res` flag), so a reset writes nothing, as on a real 6502 (design plan, branch 7).
 
 The core is otherwise unchanged. Klaus Dormann's 6502 functional test and 65C02 extended opcodes test must still pass with cen pulsed (section 11).
 
@@ -259,7 +261,7 @@ The interrupt controller (retro-z80 spec 8, unchanged) drives IRQ while an enabl
 
 **Spotting the response.** The bus interface keeps a count of stack writes in a row (WE = 1, AB in `$0100`–`$01FF`), cleared by any other cycle. The **third** stack write in a row with **bit 4 of DO clear** is the P push of an IRQ or NMI response. Nothing else makes this pattern: BRK pushes B = 1, `JSR` makes two stack writes in a row, `PHA` and `PHP` one.
 
-To tell the IRQ from the NMI at that point, the bus interface keeps a **copy of the core's NMI edge flag**, made by the same rule on the same cen clocks: set by a rising edge of NMI, cleared at the end of a cycle that reads `$FFFA`. The core reads `$FFFA` if its flag is set when it pushes P, and `$FFFE` if not (`cpu_65c02.v`, state BRK2), so with the copy clear the response is an IRQ. Reset also runs this sequence (section 8); the bus interface ignores the first response after a reset, which reads `$FFFC`.
+To tell the IRQ from the NMI at that point, the bus interface keeps a **copy of the core's NMI edge flag**, made by the same rule on the same cen clocks: set by a rising edge of NMI, cleared at the end of a cycle that reads `$FFFA`. The core reads `$FFFA` if its flag is set when it pushes P, and `$FFFE` if not (`cpu_65c02.v`, state BRK2), so with the copy clear the response is an IRQ. Reset also runs this sequence, but with no writes (section 2.1), so the watcher never sees it.
 
 **The vector reads.** At E + 2 of the P push (cycle 5) the bus interface sees an IRQ response and sends **int_vreq** at E + 3. The controller picks the pending source with the lowest number, writes it to INTID, freezes the choice and gives the vector byte v = VECBASE + 2 × source from the next clock (retro-z80 spec 8, sections 3 and 5). In cycle 6 the core reads `$FFFE`; the bus interface puts v in place of A7–A0 as it loads the request: the read goes to **`$FF00` + v**. Cycle 7's read of `$FFFF` goes to `$FF00` + v + 1. After it, the bus interface sends **int_ack**, which ends the freeze. If cycle 6 does not read `$FFFE` (it always does; a check for the testbench), nothing is changed and int_ack is still sent.
 
@@ -298,7 +300,7 @@ retro-z80's NMI monitor paging, interrupt pages and stack capture are not in ver
 - The system reset (retro-z80 spec 7) drives the core's reset. The MMU, the speed (back to 10 MHz) and the bus interface reset together with the core.
 - Reset is released so that the core's first cycle starts on **slot edge 0**, as in retro-z80. Simulations then match the board cycle for cycle.
 - After reset windows 0–6 are SRAM pages `0x000`–`0x006` and window 7 is **boot ROM page 3** (`0x3FF`, ROM offsets `0x6000`–`0x7FFF`), read and write (design plan, branch 3). So the 6502 reads its reset vector from ROM offset `0x7FFC`: the ROM image ends with its vectors, as 6502 ROMs do. Zero page and the stack are in SRAM page 0.
-- The core runs reset as its BRK sequence, and `cpu_65c02.v` makes its three stack pushes as real writes (WE = 1 in BRK0–BRK2), to wherever S points, where a real 6502 makes them reads. So a reset changes three bytes of page 1 of whatever SRAM window 0 maps (open point B8).
+- The core runs reset as its BRK sequence; its three pushes make no writes (section 2.1), so a reset leaves the SRAM as it was. Reset's sequence shows no stack writes, so the response watcher of section 7.1 never sees it.
 - The core has no RESET output; a soft reset is a write to SYSRESET (`$FE75`, retro-z80 spec 7).
 
 ## 9. Things the core does not have
@@ -337,7 +339,7 @@ retro-z80's NMI monitor paging, interrupt pages and stack capture are not in ver
 | B2 | List every state of `cpu_65c02.v` with its access (read or write) and address (section 6.5), and find which cycles make reads a program did not ask for: page-crossing indexed reads, the second read of a read-modify-write, internal cycles. If any can hit a FIFO data register in a way programs cannot avoid, bring out a "real read" signal from the core |
 | B3 | Cycle counts: check `cpu_65c02.v` against a real 65C02 instruction by instruction (a 65C02's decimal `ADC` and `SBC` take one more cycle than a 6502's; its read-modify-write and page-crossing cycles differ from the NMOS part). Exact counts matter at 1 and 2 MHz |
 | B4 | CPUSPEED's encoding for retro-6502 (n − 1 in bits 3–0, values above 9 acting as 9) and whether SYSCFG.CPU = 1 names the 65C02. Both are in spec 7, still to be written from retro-z80's |
-| B5 | The IRQ vector table (section 7.1) is a proposal that refines design plan branch 1 ("the reads of `$FFFE`/`$FFFF` return VECBASE + 2 × source"): the controller's byte becomes the low byte of a table entry's address in `$FFxx`, as IM 2 uses it, so each source has a full 16-bit handler address. To confirm |
+| B5 | Closed: the IRQ vector table at `$FF00` + VECBASE (design plan, branch 7) |
 | B6 | retro-z80's extras for the NMI and interrupts (the NMI monitor paging, interrupt pages, stack capture) and its debug unit (spec 18): which retro-6502 needs, and how each would spot the 6502's response and return (`RTI`) from outside the core. The debug link (design plan, branch 4) needs the debug unit; SYNC gives it the start of each instruction |
 | B7 | Whether the CPU's spare cycle 0 could read ahead the byte at PC + 1 for instruction fetches, as a later speed-up (`docs/notes/why-10-mhz.md`, N1) |
-| B8 | Reset pushes (section 8): `cpu_65c02.v` writes three bytes to the stack in its reset sequence. retro-z80 keeps the SRAM across resets so a debugger can look at what a crashed program left. Either suppress WE while the core is in reset's sequence (a change to the core) or accept it and document that page 1 loses three bytes |
+| B8 | Closed: reset's pushes are suppressed in the core (design plan, branch 7; section 2.1) |

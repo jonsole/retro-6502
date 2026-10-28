@@ -29,6 +29,8 @@ retro-6502 is the 6502 sister of [retro-z80](https://github.com/jonsole/retro-z8
 | 6 | Memory timing | **retro-z80's, unchanged** (5 cycles of 20 ns a slot, the CPU on cycles 0 and 2). Considered and not taken: retro-6502's own timing with 4 cycles of 25 ns (the CPU every 50 ns, the SRAM controller on 200 MHz), which would give a 20 MHz 6502 that never waits but take the fifth cycle from audio, the copper and the DMA engine (`docs/notes/why-10-mhz.md`) |
 | 6 | CPU speed | **10 MHz, never waits:** one CPU cycle a slot, locked to the slots, each access in cycle 0 or 2 of its slot. CPUSPEED divides by whole slots: a cycle every n slots gives 10, 5, 3.33, 2.5, 2 … 1 MHz, so 2 MHz (n = 5) and 1 MHz (n = 10) keep BBC Micro and C64 timing. No RDY waits for memory |
 | 6 | Fast RAM | **None:** zero page and stack are in SRAM like all other memory, so the chipset sees all of it. Branch 5's block RAM and its register page port are dropped |
+| 7 | IRQ vector table | **The two vector reads of an IRQ response go to `$FF00` + VECBASE + 2 × source and the byte after it**, through window 7: a table of 2-byte handler addresses, one per source, as IM 2's table. VECBASE = `0xD0` puts entries 21–23 on the NMI, reset and IRQ/BRK vectors, so a spurious IRQ uses the BRK vector. Refines branch 1 (spec 1, section 7.1) |
+| 7 | Reset writes | **Suppressed:** the core's reset sequence makes no writes (`cpu_65c02.v` changed), so a reset leaves the SRAM as it was, as in retro-z80 |
 
 ## 2. Known differences from retro-z80
 
