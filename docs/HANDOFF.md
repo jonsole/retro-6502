@@ -45,3 +45,7 @@ Not tried yet: Vivado (timing, size) and the board.
 - Reusable PC tools: `tools/rlink.py` (link, upload, terminal), `tools/rz80_bridge.py` (DAP for VS Code and MCP on port 8780; a stub model with `--model`), `tools/vscode/` (the debugger extension). A 6502 build needs the bridge and stub to know the 65C02's registers (design plan, branch 4).
 - The debug unit (retro-z80 spec 18) gives 4 breakpoints and 2 watchpoints in hardware; for retro-6502 it is spec 1's open point B6.
 - My retro-z80 changes about the 6502 (the design plan's branch 8 and Q2, the spec 1 note, freeing register page `0x0400`–`0x05FF`) are on retro-z80's branch `claude/festive-goldberg-ui43p7`, not yet on its `main`.
+
+## 7. From retro-hw (its session, 8 November 2026)
+
+- retro-hw (the shared hardware cores) is making `dmac.v` generic in PR jonsole/retro-hw#2 (not merged when noted): numbered requesters (the number is the priority), the slot plan as ports `slot_owner` and `slot_lock` in place of the CPU_FIRST-style parameters, no tags in `dmac.v` or `sram_ctl.v`. retro-6502's `dmac.v` and `sram_ctl.v` are retro-z80's copies (5414e5d), so nothing changes here until retro-z80 takes the new cores; then copy them and rewire `retro6502.v`. The 65C02 owns locked slot 2 only (spec 1, section 5.2), where retro-z80's CPU owns 0 and 2: slot 0 could then go to the free pool's owner.
